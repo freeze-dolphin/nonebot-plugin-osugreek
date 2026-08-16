@@ -3,7 +3,7 @@ name = "nonebot-plugin-osugreek"
 version = "1.0.9"
 description = "在图片中央贴上神秘4k希腊字母并添加色散效果的 NoneBot2 插件"
 readme = "README.md"
-requires-python = ">=3.8"
+requires-python = ">=3.10,<4.0"
 license = "MIT"
 
 dependencies = [
