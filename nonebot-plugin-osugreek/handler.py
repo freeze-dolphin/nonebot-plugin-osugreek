@@ -1,4 +1,5 @@
 from nonebot import get_plugin_config, require, on_command
+import nonebot.exception
 from nonebot.adapters.onebot.v11 import Bot, MessageEvent, MessageSegment
 from PIL import Image, ImageChops, ImageFilter
 import aiohttp
@@ -356,6 +357,9 @@ async def handle_osugreek(bot: Bot, event: MessageEvent):
         combined.save(temp_output_path, format="PNG")
         await bot.send(event,
                        MessageSegment.image(f"file:///cache/{temp_output_path.relative_to(_get_cache_dir().parent)}"))
+    except nonebot.exception.NetworkError as e:
+        print(f"图片处理失败: {str(e)}")
+        return
     except Exception as e:
         await bot.send(event, f"图片处理失败: {str(e)}")
         return
