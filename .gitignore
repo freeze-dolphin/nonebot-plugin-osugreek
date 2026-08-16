@@ -1,2 +1,3 @@
 .idea/
-nonebot_plugin_osugreek.egg-info
+nonebot_plugin_osugreek.egg-info/
+nonebot-plugin-osugreek/__pycache__/
