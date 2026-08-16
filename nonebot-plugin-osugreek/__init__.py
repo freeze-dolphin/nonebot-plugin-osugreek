@@ -1,6 +1,6 @@
 from nonebot.plugin import PluginMetadata
-from handler import osugreek
-from config import Config
+from .handler import osugreek
+from .config import Config
 
 __version__ = "1.0.9"
 __plugin_meta__ = PluginMetadata(
