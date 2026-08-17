@@ -329,6 +329,8 @@ async def handle_osugreek(bot: Bot, event: MessageEvent):
         await bot.send(event, "请发送一张图片或回复一张图片")
         return
     try:
+        print("downloading original image")
+
         async with aiohttp.ClientSession() as session:
             async with session.get(image_msg.data["url"]) as resp:
                 if resp.status != 200:
@@ -340,6 +342,8 @@ async def handle_osugreek(bot: Bot, event: MessageEvent):
         return
     temp_output_path = None
     try:
+        print("applying effects")
+
         original_img = Image.open(BytesIO(img_data)).convert("RGBA")
         width = original_img.width
         height = original_img.height
@@ -380,6 +384,8 @@ async def handle_osugreek(bot: Bot, event: MessageEvent):
         temp_filename = generate_temp_filename()
         temp_output_path = _get_cache_dir() / temp_filename
         combined.save(temp_output_path, format="PNG")
+
+        print("sending")
         await bot.send(event,
                        MessageSegment.image(f"file:///cache/{temp_output_path.relative_to(_get_cache_dir().parent)}"))
     except nonebot.exception.NetworkError as e:
