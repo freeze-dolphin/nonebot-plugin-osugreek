@@ -60,19 +60,74 @@ def get_available_images() -> list[str]:
     return available
 
 
-def find_image_path(image_name: str) -> Path | None:
-    """根据图片名称查找实际图片路径。
+def find_image_path(image_name: str) -> tuple[Path | None, list[Path]]:
+    """根据图片名称查找图片。
+
+    返回：
+        (图片路径, 空列表)
+            找到唯一图片
+
+        (None, 多个匹配路径)
+            图片名称存在歧义，需要指定完整路径
+
+        (None, 空列表)
+            图片不存在
 
     例如：
-        afdan/afdan_st
-        -> images/afdan/afdan_st.png
+        zeta
+        -> (images/osudan/zeta.png, [])
+
+        pm
+        -> (None, [
+            images/arc_clear/pm.png,
+            images/arc_text/pm.png
+        ])
+
+        arc_text/pm
+        -> (images/arc_text/pm.png, [])
     """
-    image_path = GREEK_IMAGE_DIR / f"{image_name}.png"
 
-    if image_path.is_file():
-        return image_path
+    # ---------------------------------------------------------
+    # 1.首先尝试完整路径匹配
+    # ---------------------------------------------------------
+    exact_path = GREEK_IMAGE_DIR / f"{image_name}.png"
 
-    return None
+    if exact_path.is_file():
+        return exact_path, []
+
+    # ---------------------------------------------------------
+    # 2.没有完整路径匹配，则搜索所有同名文件
+    # ---------------------------------------------------------
+    candidates = []
+
+    for image_path in GREEK_IMAGE_DIR.rglob(f"{Path(image_name).name}.png"):
+        relative_path = image_path.relative_to(GREEK_IMAGE_DIR)
+
+        # 忽略以下划线开头的文件/目录
+        if any(part.startswith("_") for part in relative_path.parts):
+            continue
+
+        # 只接受真正的文件名匹配
+        if image_path.stem == image_name:
+            candidates.append(image_path)
+
+    # ---------------------------------------------------------
+    # 3.唯一匹配
+    # ---------------------------------------------------------
+    if len(candidates) == 1:
+        return candidates[0], []
+
+    # ---------------------------------------------------------
+    # 4.多个匹配，产生歧义
+    # ---------------------------------------------------------
+    if len(candidates) > 1:
+        candidates.sort()
+        return None, candidates
+
+    # ---------------------------------------------------------
+    # 5.完全不存在
+    # ---------------------------------------------------------
+    return None, []
 
 
 def get_available_images_tree() -> str:
@@ -81,6 +136,10 @@ def get_available_images_tree() -> str:
 
     for image_path in GREEK_IMAGE_DIR.rglob("*.png"):
         relative_path = image_path.relative_to(GREEK_IMAGE_DIR)
+
+        # 隐藏以下划线开头的文件或目录
+        if any(part.startswith("_") for part in relative_path.parts):
+            continue
 
         if relative_path.parent == Path("."):
             tree.setdefault("", []).append(relative_path.stem)
@@ -112,6 +171,8 @@ def get_available_images_tree() -> str:
         return lines
 
     lines = []
+    folder_prefix = "📁 "
+    child_prefix = "｜ "
 
     # 根目录下的图片
     root_images = tree.get("", [])
@@ -119,16 +180,12 @@ def get_available_images_tree() -> str:
         image_lines = split_images(root_images)
 
         for image_line in image_lines:
-            lines.append(f"｜ {image_line}")
+            lines.append(f"{child_prefix}{image_line}")
 
     # 子目录
     folders = sorted(folder for folder in tree if folder)
 
-    for folder_index, folder in enumerate(folders):
-        is_last_folder = folder_index == len(folders) - 1
-        folder_prefix = "📁 "
-        child_prefix = "｜ " if is_last_folder else "｜ "
-
+    for folder in folders:
         lines.append(f"{folder_prefix}{folder}/")
 
         image_lines = split_images(tree[folder])
@@ -272,23 +329,6 @@ def resize_greek_image(greek_img: Image.Image, original_width: int, original_hei
     return greek_img.resize((new_width, new_height), Image.Resampling.LANCZOS)
 
 
-async def cleanup_temp_file(file_path: Path, delay: float = 5.0):
-    """清理临时文件"""
-    await asyncio.sleep(delay)
-    try:
-        if file_path.exists():
-            file_path.unlink()
-    except Exception:
-        pass
-
-
-def generate_temp_filename() -> str:
-    """生成唯一的临时文件名"""
-    timestamp = int(time.time() * 1000)
-    random_suffix = random.randint(1000, 9999)
-    return f"processed_{timestamp}_{random_suffix}.png"
-
-
 @osugreek.handle()
 async def handle_osugreek(bot: Bot, event: MessageEvent):
     msg_text = event.get_plaintext().strip()
@@ -338,7 +378,6 @@ async def handle_osugreek(bot: Bot, event: MessageEvent):
     except Exception as e:
         await bot.send(event, f"图片下载失败: {e}", reply_message=True)
         return
-    temp_output_path = None
     try:
         original_img = Image.open(BytesIO(img_data)).convert("RGBA")
         width = original_img.width
@@ -359,14 +398,29 @@ async def handle_osugreek(bot: Bot, event: MessageEvent):
             original_img = add_glitch_effect(original_img, glitch_intensity)
 
         # 加载并叠加希腊字母
-        greek_img_path = find_image_path(greek_name)
+        greek_img_path, ambiguous_paths = find_image_path(greek_name)
+
         if greek_img_path is None:
-            tree = get_available_images_tree()
-            await bot.send(
-                event,
-                f"未找到 {greek_name}\n可用的名称有:\n{tree}",
-                reply_message=True
-            )
+            if ambiguous_paths:
+                candidates = "\n".join(
+                    f"  {path.relative_to(GREEK_IMAGE_DIR).with_suffix('')}"
+                    for path in ambiguous_paths
+                )
+
+                await bot.send(
+                    event,
+                    f"{greek_name} 存在多个匹配，请指定完整路径：\n{candidates}",
+                    reply_message=True
+                )
+            else:
+                tree = get_available_images_tree()
+
+                await bot.send(
+                    event,
+                    f"未找到 {greek_name}\n可用的名称有:\n{tree}",
+                    reply_message=True
+                )
+
             return
 
         greek_img = Image.open(greek_img_path).convert("RGBA")
@@ -383,10 +437,9 @@ async def handle_osugreek(bot: Bot, event: MessageEvent):
         # temp_output_path = _get_cache_dir() / temp_filename
         # combined.save(temp_output_path, format="PNG")
 
-        buffer = BytesIO()
-        combined.convert("RGB").save(buffer, format="JPEG", quality=90)
-
-        await bot.send(event, MessageSegment.image(buffer.getvalue()), reply_message=True)
+        with BytesIO() as buffer:
+            combined.convert("RGB").save(buffer, format="JPEG", quality=90)
+            await bot.send(event, MessageSegment.image(buffer.getvalue()), reply_message=True)
     except nonebot.exception.NetworkError as e:
         print(f"图片处理失败 (NetworkError): {str(e)}")
         return
