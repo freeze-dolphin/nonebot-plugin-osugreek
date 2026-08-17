@@ -384,7 +384,7 @@ async def handle_osugreek(bot: Bot, event: MessageEvent):
         # combined.save(temp_output_path, format="PNG")
 
         buffer = BytesIO()
-        combined.save(buffer, format="JPG")
+        combined.convert("RGB").save(buffer, format="JPEG", quality=90)
 
         await bot.send(event, MessageSegment.image(buffer.getvalue()), reply_message=True)
     except nonebot.exception.NetworkError as e:
