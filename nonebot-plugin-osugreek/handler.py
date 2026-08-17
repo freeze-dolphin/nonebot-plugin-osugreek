@@ -76,7 +76,7 @@ def find_image_path(image_name: str) -> Path | None:
 
 
 def get_available_images_tree() -> str:
-    """以类似 tree 的格式返回所有可用图片名称。"""
+    """以类似 tree 的格式返回所有可用图片名称，每行最多50个字符。"""
     tree: dict[str, list[str]] = {}
 
     for image_path in GREEK_IMAGE_DIR.rglob("*.png"):
@@ -88,12 +88,38 @@ def get_available_images_tree() -> str:
             folder = relative_path.parent.as_posix()
             tree.setdefault(folder, []).append(relative_path.stem)
 
+    def split_images(images: list[str], max_length: int = 50) -> list[str]:
+        """将图片名称按长度拆分成多行。"""
+        lines = []
+        current_line = ""
+
+        for image in sorted(images):
+            if not current_line:
+                current_line = image
+                continue
+
+            candidate = f"{current_line}, {image}"
+
+            if len(candidate) > max_length:
+                lines.append(current_line)
+                current_line = image
+            else:
+                current_line = candidate
+
+        if current_line:
+            lines.append(current_line)
+
+        return lines
+
     lines = []
 
     # 根目录下的图片
-    root_images = sorted(tree.get("", []))
+    root_images = tree.get("", [])
     if root_images:
-        lines.append(f"📄─{', '.join(root_images)}")
+        image_lines = split_images(root_images)
+
+        for image_line in image_lines:
+            lines.append(f"｜ {image_line}")
 
     # 子目录
     folders = sorted(folder for folder in tree if folder)
@@ -101,12 +127,14 @@ def get_available_images_tree() -> str:
     for folder_index, folder in enumerate(folders):
         is_last_folder = folder_index == len(folders) - 1
         folder_prefix = "📁─" if is_last_folder else "📁─"
-        child_prefix = "｜  " if is_last_folder else "｜  "
-
-        images = sorted(tree[folder])
+        child_prefix = "｜ " if is_last_folder else "｜ "
 
         lines.append(f"{folder_prefix}{folder}/")
-        lines.append(f"{child_prefix}{', '.join(images)}")
+
+        image_lines = split_images(tree[folder])
+
+        for image_line in image_lines:
+            lines.append(f"{child_prefix}{image_line}")
 
     return "\n".join(lines)
 
