@@ -32,6 +32,9 @@ osugreek = on_command("osugreek", aliases={"希腊字母", "og"}, priority=5, bl
 GREEK_IMAGE_DIR = Path(__file__).parent / "images"
 GREEK_IMAGE_DIR.mkdir(exist_ok=True)
 
+folder_prefix = "📁 "
+child_prefix = "｜ "
+
 
 def get_available_images() -> list[str]:
     """递归获取所有可用图片名称。
@@ -171,8 +174,6 @@ def get_available_images_tree() -> str:
         return lines
 
     lines = []
-    folder_prefix = "📁 "
-    child_prefix = "｜ "
 
     # 根目录下的图片
     root_images = tree.get("", [])
@@ -403,13 +404,13 @@ async def handle_osugreek(bot: Bot, event: MessageEvent):
         if greek_img_path is None:
             if ambiguous_paths:
                 candidates = "\n".join(
-                    f"  {path.relative_to(GREEK_IMAGE_DIR).with_suffix('')}"
+                    f"{child_prefix}{path.relative_to(GREEK_IMAGE_DIR).with_suffix('')}"
                     for path in ambiguous_paths
                 )
 
                 await bot.send(
                     event,
-                    f"{greek_name} 存在多个匹配，请指定完整路径：\n{candidates}",
+                    f"{greek_name} 存在多个匹配：\n{candidates}",
                     reply_message=True
                 )
             else:
