@@ -91,25 +91,22 @@ def get_available_images_tree() -> str:
     lines = []
 
     # 根目录下的图片
-    for image_name in sorted(tree.get("", [])):
-        lines.append(f"├─{image_name}")
+    root_images = sorted(tree.get("", []))
+    if root_images:
+        lines.append(f"📄─{', '.join(root_images)}")
 
     # 子目录
     folders = sorted(folder for folder in tree if folder)
 
     for folder_index, folder in enumerate(folders):
         is_last_folder = folder_index == len(folders) - 1
-        folder_prefix = "└─" if is_last_folder else "├─"
-        child_prefix = "   " if is_last_folder else "│  "
-
-        lines.append(f"{folder_prefix}{folder}/")
+        folder_prefix = "📁─" if is_last_folder else "📁─"
+        child_prefix = "｜  " if is_last_folder else "｜  "
 
         images = sorted(tree[folder])
 
-        for image_index, image_name in enumerate(images):
-            is_last_image = image_index == len(images) - 1
-            image_prefix = "└─" if is_last_image else "├─"
-            lines.append(f"{child_prefix}{image_prefix}{image_name}")
+        lines.append(f"{folder_prefix}{folder}/")
+        lines.append(f"{child_prefix}{', '.join(images)}")
 
     return "\n".join(lines)
 
