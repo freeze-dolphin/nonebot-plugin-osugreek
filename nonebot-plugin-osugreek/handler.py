@@ -326,24 +326,20 @@ async def handle_osugreek(bot: Bot, event: MessageEvent):
                 image_msg = seg
                 break
     if not image_msg:
-        await bot.send(event, "请发送一张图片或回复一张图片")
+        await bot.send(event, "请发送一张图片或回复一张图片", reply_message=True)
         return
     try:
-        print("downloading original image")
-
         async with aiohttp.ClientSession() as session:
             async with session.get(image_msg.data["url"]) as resp:
                 if resp.status != 200:
-                    await bot.send(event, "图片下载失败")
+                    await bot.send(event, "图片下载失败", reply_message=True)
                     return
                 img_data = await resp.read()
     except Exception as e:
-        await bot.send(event, f"图片下载失败: {e}")
+        await bot.send(event, f"图片下载失败: {e}", reply_message=True)
         return
     temp_output_path = None
     try:
-        print("applying effects")
-
         original_img = Image.open(BytesIO(img_data)).convert("RGBA")
         width = original_img.width
         height = original_img.height
@@ -368,7 +364,8 @@ async def handle_osugreek(bot: Bot, event: MessageEvent):
             tree = get_available_images_tree()
             await bot.send(
                 event,
-                f"未找到 {greek_name}\n可用的名称有:\n{tree}"
+                f"未找到 {greek_name}\n可用的名称有:\n{tree}",
+                reply_message=True
             )
             return
 
@@ -385,14 +382,14 @@ async def handle_osugreek(bot: Bot, event: MessageEvent):
         temp_output_path = _get_cache_dir() / temp_filename
         combined.save(temp_output_path, format="PNG")
 
-        print("sending")
         await bot.send(event,
-                       MessageSegment.image(f"file:///cache/{temp_output_path.relative_to(_get_cache_dir().parent)}"))
+                       MessageSegment.image(f"file:///cache/{temp_output_path.relative_to(_get_cache_dir().parent)}"),
+                       reply_message=True)
     except nonebot.exception.NetworkError as e:
         print(f"图片处理失败: {str(e)}")
         return
     except Exception as e:
-        await bot.send(event, f"图片处理失败: {str(e)}")
+        await bot.send(event, f"图片处理失败: {str(e)}", reply_message=True)
         return
     finally:
         if temp_output_path and temp_output_path.exists():
