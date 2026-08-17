@@ -378,19 +378,21 @@ async def handle_osugreek(bot: Bot, event: MessageEvent):
         combined = Image.new("RGBA", original_img.size)
         combined.paste(original_img, (0, 0))
         combined.paste(greek_img, (x, y), greek_img)
-        temp_filename = generate_temp_filename()
-        temp_output_path = _get_cache_dir() / temp_filename
-        combined.save(temp_output_path, format="PNG")
 
-        await bot.send(event,
-                       MessageSegment.image(f"file:///cache/{temp_output_path.relative_to(_get_cache_dir().parent)}"),
-                       reply_message=True)
+        # temp_filename = generate_temp_filename()
+        # temp_output_path = _get_cache_dir() / temp_filename
+        # combined.save(temp_output_path, format="PNG")
+
+        buffer = BytesIO()
+        combined.save(buffer, format="JPG")
+
+        await bot.send(event, MessageSegment.image(buffer.getvalue()), reply_message=True)
     except nonebot.exception.NetworkError as e:
-        print(f"图片处理失败: {str(e)}")
+        print(f"图片处理失败 (NetworkError): {str(e)}")
         return
     except Exception as e:
         await bot.send(event, f"图片处理失败: {str(e)}", reply_message=True)
         return
-    finally:
-        if temp_output_path and temp_output_path.exists():
-            asyncio.create_task(cleanup_temp_file(temp_output_path))
+    # finally:
+    #     if temp_output_path and temp_output_path.exists():
+    #         asyncio.create_task(cleanup_temp_file(temp_output_path))
