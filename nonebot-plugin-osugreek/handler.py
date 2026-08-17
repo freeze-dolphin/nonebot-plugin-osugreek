@@ -1,10 +1,8 @@
 from nonebot import get_plugin_config, require, on_command
 import nonebot.exception
 from nonebot.adapters.onebot.v11 import Bot, MessageEvent, MessageSegment
-from PIL import Image, ImageChops, ImageFilter
+from PIL import Image, ImageChops, ImageFilter, ImageSequence
 import aiohttp
-import asyncio
-import time
 import random
 from io import BytesIO
 from pathlib import Path
@@ -194,7 +192,7 @@ def get_available_images_tree() -> str:
     return "\n".join(lines)
 
 
-def add_chromatic_aberration(image: Image.Image, intensity: int = None) -> Image.Image:
+def add_chromatic_aberration(image: Image.Image, intensity: int | None = None) -> Image.Image:
     """色散效果"""
     if intensity is None:
         intensity = plugin_config.osugreek_chromatic_intensity
@@ -215,7 +213,7 @@ def add_chromatic_aberration(image: Image.Image, intensity: int = None) -> Image
         return Image.merge("RGB", (r_offset, g_offset, b_offset))
 
 
-def add_glitch_effect(image: Image.Image, intensity: int = None) -> Image.Image:
+def add_glitch_effect(image: Image.Image, intensity: int | None = None) -> Image.Image:
     """故障效果"""
     if intensity is None:
         intensity = plugin_config.osugreek_glitch_intensity
@@ -327,6 +325,136 @@ def resize_greek_image(greek_img: Image.Image, original_width: int, original_hei
     return greek_img.resize((new_width, new_height), Image.Resampling.LANCZOS)
 
 
+def extract_gif_frames(img: Image.Image) -> tuple[list[Image.Image], list[int]]:
+    """提取 GIF 的所有完整帧与每帧时长(ms)。
+
+    Pillow 加载 GIF 时已按 disposal 模式把局部帧合成到完整画布上，
+    因此这里逐帧转换为 RGBA 即可，输出帧与肉眼看到的画面一致。
+    """
+    frames: list[Image.Image] = []
+    durations: list[int] = []
+
+    for frame in ImageSequence.Iterator(img):
+        duration = frame.info.get("duration")
+        durations.append(int(duration) if duration else 100)
+        frames.append(frame.convert("RGBA"))
+
+    return frames, durations
+
+
+def downsample_frames(
+    frames: list[Image.Image],
+    durations: list[int],
+    max_frames: int,
+) -> tuple[list[Image.Image], list[int]]:
+    """把帧均匀抽样到 max_frames 帧，被丢弃帧的时长并入保留帧，总时长不变。"""
+    total = len(frames)
+    new_frames: list[Image.Image] = []
+    new_durations: list[int] = []
+
+    bucket_size = total / max_frames
+    for i in range(max_frames):
+        start = int(round(i * bucket_size))
+        end = total if i == max_frames - 1 else int(round((i + 1) * bucket_size))
+        if end <= start:
+            end = min(start + 1, total)
+        representative = (start + end - 1) // 2
+        new_frames.append(frames[representative])
+        new_durations.append(sum(durations[start:end]))
+
+    return new_frames, new_durations
+
+
+def compress_gif_frames(
+    frames: list[Image.Image],
+    durations: list[int],
+    max_size: int | None = None,
+    max_frames: int | None = None,
+) -> tuple[list[Image.Image], list[int]]:
+    """压缩 GIF 帧：限制帧数并等比缩小最长边，降低处理与发送开销。
+
+    在逐帧加效果之前调用，画面变小、帧数变少后处理更快、输出更小；
+    抽帧时合并时长，动画总时长保持不变。
+    """
+    if max_size is None:
+        max_size = plugin_config.osugreek_gif_max_size
+    if max_frames is None:
+        max_frames = plugin_config.osugreek_gif_max_frames
+
+    # 帧数上限
+    if max_frames > 0 and len(frames) > max_frames:
+        frames, durations = downsample_frames(frames, durations, max_frames)
+
+    # 最长边上限
+    if max_size > 0:
+        width, height = frames[0].size
+        longest = max(width, height)
+        if longest > max_size:
+            scale = max_size / longest
+            new_size = (max(1, int(width * scale)), max(1, int(height * scale)))
+            frames = [frame.resize(new_size, Image.Resampling.LANCZOS) for frame in frames]
+
+    return frames, durations
+
+
+def save_animated_gif(
+        frames: list[Image.Image],
+        durations: list[int],
+        loop: int = 0,
+        colors: int | None = None,
+) -> BytesIO:
+    """将处理后的帧保存为动画 GIF，保留每帧时长与循环设置。
+
+    colors: 输出调色板颜色数上限，超过则量化压缩；0/None 表示不限制。
+    量化放在效果之后，避免故障噪点重新引入超出上限的颜色。
+    """
+    if colors:
+        frames = [
+            frame.quantize(colors=colors, method=Image.Quantize.FASTOCTREE).convert("RGBA")
+            for frame in frames
+        ]
+
+    buffer = BytesIO()
+
+    frames[0].save(
+        buffer,
+        format="GIF",
+        save_all=True,
+        append_images=frames[1:],
+        duration=durations,
+        loop=loop,
+        disposal=2,
+    )
+    buffer.seek(0)
+    return buffer
+
+
+def overlay_greek(image: Image.Image, greek_img: Image.Image) -> Image.Image:
+    """将希腊字母图片居中叠加到图片上。"""
+    orig_w, orig_h = image.size
+    greek_w, greek_h = greek_img.size
+    x = (orig_w - greek_w) // 2
+    y = (orig_h - greek_h) // 2
+    combined = Image.new("RGBA", image.size)
+    combined.paste(image, (0, 0))
+    combined.paste(greek_img, (x, y), greek_img)
+    return combined
+
+
+def process_frame(
+        frame: Image.Image,
+        greek_img: Image.Image,
+        chromatic_intensity: int,
+        glitch_intensity: int | None,
+) -> Image.Image:
+    """对单帧依次应用色散、故障效果，最后叠加希腊字母。"""
+    if chromatic_intensity > 0:
+        frame = add_chromatic_aberration(frame, intensity=chromatic_intensity)
+    if glitch_intensity is not None and glitch_intensity > 0:
+        frame = add_glitch_effect(frame, glitch_intensity)
+    return overlay_greek(frame, greek_img)
+
+
 @osugreek.handle()
 async def handle_osugreek(bot: Bot, event: MessageEvent):
     msg_text = event.get_plaintext().strip()
@@ -377,73 +505,85 @@ async def handle_osugreek(bot: Bot, event: MessageEvent):
         await bot.send(event, f"图片下载失败: {e}", reply_message=True)
         return
     try:
-        original_img = Image.open(BytesIO(img_data)).convert("RGBA")
-        width = original_img.width
-        height = original_img.height
+        with Image.open(BytesIO(img_data)) as img:
+            # 加载并叠加希腊字母
+            greek_img_path, ambiguous_paths = find_image_path(greek_name)
 
-        # 应用色散效果
-        if chromatic_intensity is None:
-            chromatic_intensity = 4
+            if greek_img_path is None:
+                if ambiguous_paths:
+                    candidates = "\n".join(
+                        f"{child_prefix}{path.relative_to(GREEK_IMAGE_DIR).with_suffix('')}"
+                        for path in ambiguous_paths
+                    )
 
-        if chromatic_intensity > 0:
-            original_img = add_chromatic_aberration(
-                original_img,
-                intensity=chromatic_intensity
+                    await bot.send(
+                        event,
+                        f"{greek_name} 存在多个匹配：\n{candidates}",
+                        reply_message=True
+                    )
+                else:
+                    tree = get_available_images_tree()
+
+                    await bot.send(
+                        event,
+                        f"未找到 {greek_name}\n可用的名称有:\n{tree}",
+                        reply_message=True
+                    )
+
+                return
+
+            # 应用色散效果
+            if chromatic_intensity is None:
+                chromatic_intensity = 4
+
+            # 动图：压缩帧数/尺寸后逐帧处理，保持总时长与循环设置，输出 GIF
+            if getattr(img, "is_animated", False):
+                loop = img.info.get("loop", 0)
+                frames, durations = extract_gif_frames(img)
+                frames, durations = compress_gif_frames(frames, durations)
+
+                greek_img = Image.open(greek_img_path).convert("RGBA")
+                greek_img = resize_greek_image(greek_img, frames[0].width, frames[0].height)
+
+                processed_frames = [
+                    process_frame(frame, greek_img, chromatic_intensity, glitch_intensity)
+                    for frame in frames
+                ]
+                gif_data = save_animated_gif(
+                    processed_frames,
+                    durations,
+                    loop,
+                    plugin_config.osugreek_gif_colors,
+                )
+                await bot.send(
+                    event,
+                    MessageSegment.image(gif_data.getvalue()),
+                    reply_message=True,
+                )
+                return
+
+            # 静态图片：单帧处理，输出 JPEG
+            greek_img = Image.open(greek_img_path).convert("RGBA")
+            greek_img = resize_greek_image(greek_img, img.width, img.height)
+            combined = process_frame(
+                img.convert("RGBA"),
+                greek_img,
+                chromatic_intensity,
+                glitch_intensity,
             )
 
-        # 应用故障效果（如果指定了强度）
-        if glitch_intensity is not None and glitch_intensity > 0:
-            original_img = add_glitch_effect(original_img, glitch_intensity)
-
-        # 加载并叠加希腊字母
-        greek_img_path, ambiguous_paths = find_image_path(greek_name)
-
-        if greek_img_path is None:
-            if ambiguous_paths:
-                candidates = "\n".join(
-                    f"{child_prefix}{path.relative_to(GREEK_IMAGE_DIR).with_suffix('')}"
-                    for path in ambiguous_paths
-                )
-
+            with BytesIO() as buffer:
+                combined.convert("RGB").save(buffer, format="JPEG", quality=90)
                 await bot.send(
                     event,
-                    f"{greek_name} 存在多个匹配：\n{candidates}",
-                    reply_message=True
+                    MessageSegment.image(buffer.getvalue()),
+                    reply_message=True,
                 )
-            else:
-                tree = get_available_images_tree()
-
-                await bot.send(
-                    event,
-                    f"未找到 {greek_name}\n可用的名称有:\n{tree}",
-                    reply_message=True
-                )
-
-            return
-
-        greek_img = Image.open(greek_img_path).convert("RGBA")
-        greek_img = resize_greek_image(greek_img, width, height)
-        orig_w, orig_h = original_img.size
-        greek_w, greek_h = greek_img.size
-        x = (orig_w - greek_w) // 2
-        y = (orig_h - greek_h) // 2
-        combined = Image.new("RGBA", original_img.size)
-        combined.paste(original_img, (0, 0))
-        combined.paste(greek_img, (x, y), greek_img)
-
-        # temp_filename = generate_temp_filename()
-        # temp_output_path = _get_cache_dir() / temp_filename
-        # combined.save(temp_output_path, format="PNG")
-
-        with BytesIO() as buffer:
-            combined.convert("RGB").save(buffer, format="JPEG", quality=90)
-            await bot.send(event, MessageSegment.image(buffer.getvalue()), reply_message=True)
-    except nonebot.exception.NetworkError as e:
-        print(f"图片处理失败 (NetworkError): {str(e)}")
-        return
+    except nonebot.exception.NetworkError as _:
+        raise
     except Exception as e:
         await bot.send(event, f"图片处理失败: {str(e)}", reply_message=True)
-        return
+        raise
     # finally:
     #     if temp_output_path and temp_output_path.exists():
     #         asyncio.create_task(cleanup_temp_file(temp_output_path))
