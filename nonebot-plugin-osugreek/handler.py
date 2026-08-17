@@ -126,7 +126,7 @@ def get_available_images_tree() -> str:
 
     for folder_index, folder in enumerate(folders):
         is_last_folder = folder_index == len(folders) - 1
-        folder_prefix = "📁─" if is_last_folder else "📁─"
+        folder_prefix = "📁 "
         child_prefix = "｜ " if is_last_folder else "｜ "
 
         lines.append(f"{folder_prefix}{folder}/")
@@ -310,7 +310,7 @@ async def handle_osugreek(bot: Bot, event: MessageEvent):
         glitch_intensity = int(command_parts[param_index])
 
     if greek_name == "help" or not greek_name:
-        help_text = "用法：/osugreek <名称> [色散强度, 0~20] [故障强度, 0~5]"
+        help_text = "用法：/osugreek <完整名称> [色散强度, 0~20] [故障强度, 0~5]"
         await bot.send(event, help_text)
         tree = get_available_images_tree()
         await bot.send(event, f"可用的名称有:\n{tree}")
