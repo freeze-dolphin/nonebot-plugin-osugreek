@@ -41,9 +41,6 @@ def get_available_images() -> list[str]:
 
     名称格式：
         ${文件夹名称}/${图片名称去掉.png}
-
-    例如：
-        images/afdan/afdan_st.png -> afdan/afdan_st
     """
     available = []
 
@@ -351,7 +348,7 @@ async def handle_osugreek(bot: Bot, event: MessageEvent):
         glitch_intensity = int(command_parts[param_index])
 
     if greek_name == "help" or not greek_name:
-        help_text = "用法：/osugreek <完整名称> [色散强度, 0~20] [故障强度, 0~5]"
+        help_text = "用法：/osugreek <名称> [色散强度, 0~20] [故障强度, 0~5]"
         await bot.send(event, help_text)
         tree = get_available_images_tree()
         await bot.send(event, f"可用的名称有:\n{tree}")
