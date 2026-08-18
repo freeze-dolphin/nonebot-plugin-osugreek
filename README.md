@@ -96,6 +96,12 @@ osugreek_gif_max_size: int = 800
 osugreek_gif_max_frames: int = 30
 # GIF压缩: 输出调色板颜色数上限 (0=不限制)
 osugreek_gif_colors: int = 128
+# 自动osugreek: 可用名称列表（如 "afdan/10dan"），为空则关闭
+osugreek_auto_names: list[str] = ["afdan/10dan"]
+# 自动osugreek: 触发白名单（QQ号，字符串或数字均可），仅白名单内用户发送正方形图片才会触发
+osugreek_auto_whitelist: list[str | int] = ["10001"]
+# 自动osugreek: 触发概率 (0-1, 默认0.1)
+osugreek_auto_probability: float = 0.1
 ```
 </details>
 <details><summary><strong>图片</strong></summary>

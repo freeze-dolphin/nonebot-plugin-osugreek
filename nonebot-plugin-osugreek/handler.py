@@ -1,6 +1,7 @@
-from nonebot import get_plugin_config, require, on_command
+from nonebot import get_plugin_config, require, on_command, on_message
 import nonebot.exception
-from nonebot.adapters.onebot.v11 import Bot, MessageEvent, MessageSegment
+from nonebot.adapters.onebot.v11 import Bot, GroupMessageEvent, MessageEvent, MessageSegment
+from nonebot.rule import Rule
 from PIL import Image, ImageChops, ImageFilter, ImageSequence
 import aiohttp
 import random
@@ -25,6 +26,15 @@ from .config import Config
 
 plugin_config = get_plugin_config(Config)
 osugreek = on_command("osugreek", aliases={"希腊字母", "og"}, priority=5, block=False)
+
+
+def _has_image(event: GroupMessageEvent) -> bool:
+    """自动触发规则：群消息中包含图片。"""
+    return any(seg.type == "image" for seg in event.message)
+
+
+# 自动 osugreek：群内发送正方形图片时按概率触发（静默发送，不回复）
+auto_osugreek = on_message(rule=Rule(_has_image), priority=50, block=False)
 
 # 希腊字母图片目录
 GREEK_IMAGE_DIR = Path(__file__).parent / "images"
@@ -455,6 +465,62 @@ def process_frame(
     return overlay_greek(frame, greek_img)
 
 
+def process_image_bytes(
+    img_data: bytes,
+    greek_img_path: Path,
+    chromatic_intensity: int | None = None,
+    glitch_intensity: int | None = None,
+) -> bytes:
+    """对图片字节应用色散/故障效果并叠加希腊字母，返回输出图片字节。
+
+    动图输出 GIF（压缩后逐帧处理），静态图输出 JPEG。
+    """
+    if chromatic_intensity is None:
+        chromatic_intensity = 4
+
+    with Image.open(BytesIO(img_data)) as img:
+        if getattr(img, "is_animated", False):
+            loop = img.info.get("loop", 0)
+            frames, durations = extract_gif_frames(img)
+            frames, durations = compress_gif_frames(frames, durations)
+
+            greek_img = Image.open(greek_img_path).convert("RGBA")
+            greek_img = resize_greek_image(greek_img, frames[0].width, frames[0].height)
+
+            processed_frames = [
+                process_frame(frame, greek_img, chromatic_intensity, glitch_intensity)
+                for frame in frames
+            ]
+            return save_animated_gif(
+                processed_frames,
+                durations,
+                loop,
+                plugin_config.osugreek_gif_colors,
+            ).getvalue()
+
+        greek_img = Image.open(greek_img_path).convert("RGBA")
+        greek_img = resize_greek_image(greek_img, img.width, img.height)
+        combined = process_frame(
+            img.convert("RGBA"),
+            greek_img,
+            chromatic_intensity,
+            glitch_intensity,
+        )
+
+    with BytesIO() as buffer:
+        combined.convert("RGB").save(buffer, format="JPEG", quality=90)
+        return buffer.getvalue()
+
+
+def check_image_is_square(img_data: bytes) -> bool:
+    """判断图片字节是否为正方形（静态/动态均取整体尺寸）。"""
+    try:
+        with Image.open(BytesIO(img_data)) as img:
+            return img.width == img.height
+    except Exception:
+        return False
+
+
 @osugreek.handle()
 async def handle_osugreek(bot: Bot, event: MessageEvent):
     msg_text = event.get_plaintext().strip()
@@ -505,85 +571,107 @@ async def handle_osugreek(bot: Bot, event: MessageEvent):
         await bot.send(event, f"图片下载失败: {e}", reply_message=True)
         return
     try:
-        with Image.open(BytesIO(img_data)) as img:
-            # 加载并叠加希腊字母
-            greek_img_path, ambiguous_paths = find_image_path(greek_name)
+        greek_img_path, ambiguous_paths = find_image_path(greek_name)
 
-            if greek_img_path is None:
-                if ambiguous_paths:
-                    candidates = "\n".join(
-                        f"{child_prefix}{path.relative_to(GREEK_IMAGE_DIR).with_suffix('')}"
-                        for path in ambiguous_paths
-                    )
-
-                    await bot.send(
-                        event,
-                        f"{greek_name} 存在多个匹配：\n{candidates}",
-                        reply_message=True
-                    )
-                else:
-                    tree = get_available_images_tree()
-
-                    await bot.send(
-                        event,
-                        f"未找到 {greek_name}\n可用的名称有:\n{tree}",
-                        reply_message=True
-                    )
-
-                return
-
-            # 应用色散效果
-            if chromatic_intensity is None:
-                chromatic_intensity = 4
-
-            # 动图：压缩帧数/尺寸后逐帧处理，保持总时长与循环设置，输出 GIF
-            if getattr(img, "is_animated", False):
-                loop = img.info.get("loop", 0)
-                frames, durations = extract_gif_frames(img)
-                frames, durations = compress_gif_frames(frames, durations)
-
-                greek_img = Image.open(greek_img_path).convert("RGBA")
-                greek_img = resize_greek_image(greek_img, frames[0].width, frames[0].height)
-
-                processed_frames = [
-                    process_frame(frame, greek_img, chromatic_intensity, glitch_intensity)
-                    for frame in frames
-                ]
-                gif_data = save_animated_gif(
-                    processed_frames,
-                    durations,
-                    loop,
-                    plugin_config.osugreek_gif_colors,
+        if greek_img_path is None:
+            if ambiguous_paths:
+                candidates = "\n".join(
+                    f"{child_prefix}{path.relative_to(GREEK_IMAGE_DIR).with_suffix('')}"
+                    for path in ambiguous_paths
                 )
+
                 await bot.send(
                     event,
-                    MessageSegment.image(gif_data.getvalue()),
-                    reply_message=True,
+                    f"{greek_name} 存在多个匹配：\n{candidates}",
+                    reply_message=True
                 )
-                return
+            else:
+                tree = get_available_images_tree()
 
-            # 静态图片：单帧处理，输出 JPEG
-            greek_img = Image.open(greek_img_path).convert("RGBA")
-            greek_img = resize_greek_image(greek_img, img.width, img.height)
-            combined = process_frame(
-                img.convert("RGBA"),
-                greek_img,
-                chromatic_intensity,
-                glitch_intensity,
-            )
-
-            with BytesIO() as buffer:
-                combined.convert("RGB").save(buffer, format="JPEG", quality=90)
                 await bot.send(
                     event,
-                    MessageSegment.image(buffer.getvalue()),
-                    reply_message=True,
+                    f"未找到 {greek_name}\n可用的名称有:\n{tree}",
+                    reply_message=True
                 )
+
+            return
+
+        output = process_image_bytes(
+            img_data,
+            greek_img_path,
+            chromatic_intensity,
+            glitch_intensity,
+        )
     except nonebot.exception.NetworkError as _:
         raise
     except Exception as e:
         await bot.send(event, f"图片处理失败: {str(e)}", reply_message=True)
         raise
+
+    await bot.send(event, MessageSegment.image(output), reply_message=True)
     # finally:
     #     if temp_output_path and temp_output_path.exists():
     #         asyncio.create_task(cleanup_temp_file(temp_output_path))
+
+
+@auto_osugreek.handle()
+async def handle_auto_osugreek(bot: Bot, event: GroupMessageEvent):
+    """群内发送正方形图片时，按概率随机套用 osugreek 效果并直接发送。
+
+    全程静默：概率未通过、不在白名单、非正方形或处理失败均不提示。
+    """
+    # 概率判断（默认10%）
+    if random.random() >= plugin_config.osugreek_auto_probability:
+        return
+    # 白名单判断（兼容字符串/数字两种写法）
+    if (
+        str(event.user_id) not in plugin_config.osugreek_auto_whitelist
+        and event.user_id not in plugin_config.osugreek_auto_whitelist
+    ):
+        return
+    # 名称列表为空则功能关闭
+    if not plugin_config.osugreek_auto_names:
+        return
+
+    image_msg = None
+    for seg in event.message:
+        if seg.type == "image":
+            image_msg = seg
+            break
+    if not image_msg or "url" not in image_msg.data:
+        return
+
+    # 段内元数据明确不是正方形时直接跳过，避免多余下载
+    seg_w = image_msg.data.get("width")
+    seg_h = image_msg.data.get("height")
+    if seg_w is not None and seg_h is not None:
+        try:
+            if int(seg_w) != int(seg_h):
+                return
+        except (TypeError, ValueError):
+            pass
+
+    # 下载图片
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(image_msg.data["url"]) as resp:
+                if resp.status != 200:
+                    return
+                img_data = await resp.read()
+    except Exception:
+        return
+
+    # 正方形校验（静态/动态均取整体尺寸）
+    if not check_image_is_square(img_data):
+        return
+
+    # 随机选取名称并处理，失败静默
+    try:
+        greek_name = random.choice(plugin_config.osugreek_auto_names)
+        greek_img_path, _ = find_image_path(greek_name)
+        if greek_img_path is None:
+            return
+        output = process_image_bytes(img_data, greek_img_path)
+        await bot.send(event, MessageSegment.image(output))
+    except Exception:
+        return
