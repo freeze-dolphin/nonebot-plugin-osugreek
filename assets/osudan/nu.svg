@@ -1,0 +1,104 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!-- Created with Inkscape (http://www.inkscape.org/) -->
+
+<svg
+   width="1920"
+   height="1080"
+   viewBox="0 0 1920 1080"
+   version="1.1"
+   id="svg1"
+   inkscape:version="1.4.4 (dcaf3e7, 2026-05-05)"
+   sodipodi:docname="nu.svg"
+   inkscape:export-filename="nu.png"
+   inkscape:export-xdpi="96"
+   inkscape:export-ydpi="96"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns:xlink="http://www.w3.org/1999/xlink"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:svg="http://www.w3.org/2000/svg">
+  <sodipodi:namedview
+     id="namedview1"
+     pagecolor="#ffffff"
+     bordercolor="#000000"
+     borderopacity="0.25"
+     inkscape:showpageshadow="2"
+     inkscape:pageopacity="0.0"
+     inkscape:pagecheckerboard="0"
+     inkscape:deskcolor="#d1d1d1"
+     inkscape:document-units="px"
+     inkscape:zoom="0.77519855"
+     inkscape:cx="1041.6686"
+     inkscape:cy="510.83687"
+     inkscape:window-width="2560"
+     inkscape:window-height="1373"
+     inkscape:window-x="1591"
+     inkscape:window-y="29"
+     inkscape:window-maximized="1"
+     inkscape:current-layer="layer1" />
+  <defs
+     id="defs1">
+    <linearGradient
+       id="linearGradient4"
+       inkscape:collect="always">
+      <stop
+         style="stop-color:#919191;stop-opacity:1;"
+         offset="0"
+         id="stop4" />
+      <stop
+         style="stop-color:#535353;stop-opacity:1;"
+         offset="1"
+         id="stop5" />
+    </linearGradient>
+    <filter
+       inkscape:collect="always"
+       style="color-interpolation-filters:sRGB"
+       id="filter11"
+       x="-0.1931288"
+       y="-0.17534962"
+       width="1.3862576"
+       height="1.3506992">
+      <feGaussianBlur
+         inkscape:collect="always"
+         stdDeviation="3.4266608"
+         id="feGaussianBlur11" />
+    </filter>
+    <linearGradient
+       inkscape:collect="always"
+       xlink:href="#linearGradient4"
+       id="linearGradient1"
+       gradientUnits="userSpaceOnUse"
+       x1="207.31023"
+       y1="228.87798"
+       x2="305.22845"
+       y2="285.4111" />
+  </defs>
+  <g
+     inkscape:label="nu"
+     inkscape:groupmode="layer"
+     id="layer1"
+     transform="matrix(3.3915853,0,0,3.3915853,111.53383,-428.09286)">
+    <text
+       xml:space="preserve"
+       style="font-size:213.333px;font-family:'Ink Free';-inkscape-font-specification:'Ink Free';letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;direction:ltr;mix-blend-mode:normal;fill:none;fill-opacity:1;fill-rule:nonzero;stroke:#000000;stroke-width:25;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:none;stroke-opacity:1;paint-order:markers stroke fill;filter:url(#filter11)"
+       x="181.5815"
+       y="342.61279"
+       id="text5"><tspan
+         sodipodi:role="line"
+         id="tspan5"
+         x="181.5815"
+         y="342.61279"
+         style="font-style:italic;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:213.333px;font-family:'Noto Serif';-inkscape-font-specification:'Noto Serif';fill:none;fill-opacity:1;fill-rule:nonzero;stroke:#000000;stroke-width:25;stroke-dasharray:none;stroke-opacity:1">ν</tspan></text>
+    <text
+       xml:space="preserve"
+       style="font-size:213.333px;font-family:'Ink Free';-inkscape-font-specification:'Ink Free';letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;direction:ltr;fill:url(#linearGradient1);fill-opacity:1;fill-rule:nonzero;stroke:#000000;stroke-width:12;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:none;stroke-opacity:1;paint-order:markers stroke fill"
+       x="188.00279"
+       y="338.6377"
+       id="text1"><tspan
+         sodipodi:role="line"
+         id="tspan1"
+         x="188.00279"
+         y="338.6377"
+         style="font-style:italic;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:213.333px;font-family:'Noto Serif';-inkscape-font-specification:'Noto Serif';fill:url(#linearGradient1);fill-opacity:1;fill-rule:nonzero;stroke:#000000;stroke-width:12;stroke-dasharray:none;stroke-opacity:1">ν</tspan></text>
+  </g>
+</svg>
