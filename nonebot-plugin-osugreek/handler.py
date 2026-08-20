@@ -353,9 +353,9 @@ def extract_gif_frames(img: Image.Image) -> tuple[list[Image.Image], list[int]]:
 
 
 def downsample_frames(
-    frames: list[Image.Image],
-    durations: list[int],
-    max_frames: int,
+        frames: list[Image.Image],
+        durations: list[int],
+        max_frames: int,
 ) -> tuple[list[Image.Image], list[int]]:
     """把帧均匀抽样到 max_frames 帧，被丢弃帧的时长并入保留帧，总时长不变。"""
     total = len(frames)
@@ -376,10 +376,10 @@ def downsample_frames(
 
 
 def compress_gif_frames(
-    frames: list[Image.Image],
-    durations: list[int],
-    max_size: int | None = None,
-    max_frames: int | None = None,
+        frames: list[Image.Image],
+        durations: list[int],
+        max_size: int | None = None,
+        max_frames: int | None = None,
 ) -> tuple[list[Image.Image], list[int]]:
     """压缩 GIF 帧：限制帧数并等比缩小最长边，降低处理与发送开销。
 
@@ -466,10 +466,10 @@ def process_frame(
 
 
 def process_image_bytes(
-    img_data: bytes,
-    greek_img_path: Path,
-    chromatic_intensity: int | None = None,
-    glitch_intensity: int | None = None,
+        img_data: bytes,
+        greek_img_path: Path,
+        chromatic_intensity: int | None = None,
+        glitch_intensity: int | None = None,
 ) -> bytes:
     """对图片字节应用色散/故障效果并叠加希腊字母，返回输出图片字节。
 
@@ -512,11 +512,11 @@ def process_image_bytes(
         return buffer.getvalue()
 
 
-def check_image_is_square(img_data: bytes) -> bool:
+def should_be_auto_osugreeked(img_data: bytes) -> bool:
     """判断图片字节是否为正方形（静态/动态均取整体尺寸）。"""
     try:
         with Image.open(BytesIO(img_data)) as img:
-            return img.width == img.height
+            return img.width not in [866, 1280, 1028]
     except Exception:
         return False
 
@@ -625,8 +625,8 @@ async def handle_auto_osugreek(bot: Bot, event: GroupMessageEvent):
         return
     # 白名单判断（兼容字符串/数字两种写法）
     if (
-        str(event.user_id) not in plugin_config.osugreek_auto_whitelist
-        and event.user_id not in plugin_config.osugreek_auto_whitelist
+            str(event.user_id) not in plugin_config.osugreek_auto_whitelist
+            and event.user_id not in plugin_config.osugreek_auto_whitelist
     ):
         return
     # 名称列表为空则功能关闭
@@ -662,7 +662,7 @@ async def handle_auto_osugreek(bot: Bot, event: GroupMessageEvent):
         return
 
     # 正方形校验（静态/动态均取整体尺寸）
-    if not check_image_is_square(img_data):
+    if not should_be_auto_osugreeked(img_data):
         return
 
     # 随机选取名称并处理，失败静默
