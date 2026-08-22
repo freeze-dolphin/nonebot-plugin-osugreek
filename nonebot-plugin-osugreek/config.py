@@ -4,6 +4,8 @@ from pydantic import BaseModel, Field
 class Config(BaseModel):
     """osugreek插件配置"""
     osugreek_group_blacklist: list[str | int] = Field(default_factory=list)
+    # 主人（QQ号，字符串或数字均可），owner发起的指令无视群聊黑名单
+    osugreek_owner: list[str | int] = Field(default_factory=list)
     # RGB分离强度 (范围1-20, 默认4)
     osugreek_chromatic_intensity: int = 4
     # 故障效果强度 (范围0-5, 默认0, 0表示无故障效果)
