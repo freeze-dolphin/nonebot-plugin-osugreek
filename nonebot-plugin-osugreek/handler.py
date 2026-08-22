@@ -574,7 +574,7 @@ async def handle_osugreek(bot: Bot, event: MessageEvent):
                 image_msg = seg
                 break
     if not image_msg:
-        await bot.send(event, "请发送一张图片或回复一张图片", reply_message=True)
+        await bot.send(event, "请回复一张图片", reply_message=True)
         return
     try:
         async with aiohttp.ClientSession() as session:
