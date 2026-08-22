@@ -523,6 +523,13 @@ def should_be_auto_osugreeked(img_data: bytes) -> bool:
 
 @osugreek.handle()
 async def handle_osugreek(bot: Bot, event: MessageEvent):
+    # 群聊黑名单（兼容字符串/数字两种写法）
+    if isinstance(event, GroupMessageEvent) and (
+            str(event.group_id) in plugin_config.osugreek_group_blacklist
+            or event.group_id in plugin_config.osugreek_group_blacklist
+    ):
+        return
+
     msg_text = event.get_plaintext().strip()
     command_parts = msg_text.split()
 
