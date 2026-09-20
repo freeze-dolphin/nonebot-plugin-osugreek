@@ -1,6 +1,13 @@
-from nonebot import get_plugin_config, require, on_command, on_message
+from nonebot import get_plugin_config, require, on_command, on_message, on_notice
 import nonebot.exception
-from nonebot.adapters.onebot.v11 import Bot, GroupMessageEvent, MessageEvent, MessageSegment
+from nonebot.adapters import Event
+from nonebot.adapters.onebot.v11 import (
+    Bot,
+    GroupMessageEvent,
+    MessageEvent,
+    MessageSegment,
+    PokeNotifyEvent,
+)
 from nonebot.rule import Rule
 from PIL import Image, ImageChops, ImageFilter, ImageSequence
 import aiohttp
@@ -36,9 +43,21 @@ def _has_image(event: GroupMessageEvent) -> bool:
 # 自动 osugreek：群内发送正方形图片时按概率触发（静默发送，不回复）
 auto_osugreek = on_message(rule=Rule(_has_image), priority=50, block=False)
 
+
+def _is_poke_to_me(bot: Bot, event: Event) -> bool:
+    """戳一戳规则：事件为戳一戳，且戳的是 bot 自己。"""
+    return isinstance(event, PokeNotifyEvent) and event.is_tome()
+
+
+# 戳一戳 osugreek：白名单群聊内被戳时，用戳 bot 用户的头像套用效果（静默发送，不回复）
+poke_osugreek = on_notice(rule=Rule(_is_poke_to_me), priority=50, block=False)
+
 # 希腊字母图片目录
 GREEK_IMAGE_DIR = Path(__file__).parent / "images"
 GREEK_IMAGE_DIR.mkdir(exist_ok=True)
+
+# QQ头像接口（640为可用的最大尺寸），用于戳一戳时获取用户头像
+QQ_AVATAR_URL = "https://q1.qlogo.cn/g?b=qq&nk={user_id}&s=640"
 
 folder_prefix = "📁 "
 child_prefix = "｜ "
@@ -679,6 +698,50 @@ async def handle_auto_osugreek(bot: Bot, event: GroupMessageEvent):
 
     # 正方形校验（静态/动态均取整体尺寸）
     if not should_be_auto_osugreeked(img_data):
+        return
+
+    # 随机选取名称并处理，失败静默
+    try:
+        greek_name = random.choice(plugin_config.osugreek_auto_names)
+        greek_img_path, _ = find_image_path(greek_name)
+        if greek_img_path is None:
+            return
+        output = process_image_bytes(img_data, greek_img_path)
+        await bot.send(event, MessageSegment.image(output))
+    except Exception:
+        return
+
+
+@poke_osugreek.handle()
+async def handle_poke_osugreek(bot: Bot, event: PokeNotifyEvent):
+    """被戳一戳时，用戳 bot 用户的头像套用 osugreek 效果并直接发送。
+
+    仅在群聊白名单内的群生效，全程静默：不在白名单、名称列表为空、
+    头像下载失败或处理失败均不提示。
+    """
+    # 仅群聊生效（私聊戳一戳无群号）
+    if event.group_id is None:
+        return
+    # 群聊白名单判断（兼容字符串/数字两种写法），为空则功能关闭
+    if (
+            str(event.group_id) not in plugin_config.osugreek_poke_group_whitelist
+            and event.group_id not in plugin_config.osugreek_poke_group_whitelist
+    ):
+        return
+    # 名称列表与 auto_osugreek 相同，为空则功能关闭
+    if not plugin_config.osugreek_auto_names:
+        return
+
+    # 下载戳 bot 用户的头像
+    avatar_url = QQ_AVATAR_URL.format(user_id=event.user_id)
+    try:
+        timeout = aiohttp.ClientTimeout(total=10)
+        async with aiohttp.ClientSession(timeout=timeout) as session:
+            async with session.get(avatar_url) as resp:
+                if resp.status != 200:
+                    return
+                img_data = await resp.read()
+    except Exception:
         return
 
     # 随机选取名称并处理，失败静默

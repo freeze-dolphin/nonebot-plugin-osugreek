@@ -22,3 +22,6 @@ class Config(BaseModel):
     osugreek_auto_whitelist: list[str | int] = Field(default_factory=list)
     # 自动osugreek: 触发概率 (0-1, 默认0.1)
     osugreek_auto_probability: float = 0.1
+    # 戳一戳osugreek: 触发白名单群聊（群号，字符串或数字均可），为空则关闭
+    # 仅在白名单群聊内被戳时触发，使用戳bot用户的头像作为输入
+    osugreek_poke_group_whitelist: list[str | int] = Field(default_factory=list)
